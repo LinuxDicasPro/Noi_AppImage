@@ -1,0 +1,138 @@
+#!/bin/bash
+#
+# tarball2appimage by LinuxDicasPro
+#
+####################################
+
+
+destdir=~/__APPIMAGE__
+test -e "../_APPIMAGE" && destdir="../_APPIMAGE" # Opcional
+
+
+###########################################
+
+arch="x86_64"
+prg="Noi"
+link="https://github.com/lencx/Noi/releases"
+
+###########################################
+
+
+for i in {1..35}; { printf '─'; }; printf "\n"
+printf "Search latest version: "
+
+
+########
+
+version="$(grep -Eom1 "([0-9]+[.]){2}[0-9]+" <(grep -A1 "Latest" <(links -dump "$link")))"
+
+########
+
+
+printf "\033[1;32m$version\033[m\n"
+for i in {1..35}; { printf '─'; }; printf "\n"
+
+
+test -z "$version" && {
+    echo "update script. version not found!"
+    exit 1
+}
+
+set -e
+
+test ! -e $destdir && mkdir -p $destdir
+cd $destdir
+
+
+test -e "$prg-$version-$arch.AppImage" && {
+    echo "appimage found!"
+    exit 0
+}
+
+test ! -e "appimagetool-x86_64.AppImage" && {
+    link_tool="https://github.com/AppImage/AppImageKit/releases/download/13/appimagetool-x86_64.AppImage"
+    wget -c -q --show-progress "$link_tool"
+    chmod +x "appimagetool-x86_64.AppImage"
+}
+
+
+#########
+
+link_prg="https://github.com/lencx/Noi/releases/download/v${version}/Noi_linux_${version}.AppImage"
+
+#########
+
+
+wget -c -q --show-progress "$link_prg"
+file_prg=${link_prg##*/}
+
+rm -rf "$prg.AppDir"
+
+chmod +x $file_prg
+./$file_prg --appimage-extract
+
+mv squashfs-root "$prg.AppDir"
+
+cd "$prg.AppDir"
+
+rm -rf ./AppRun
+cp usr/lib/noi/resources/icons/noi.png Noi.png
+
+
+####################################
+
+appimage_name="Noi"
+comment="Navegador Aprimorado por IA"
+categories="Network;"
+
+####################################
+
+
+echo "[Desktop Entry]
+Name=$appimage_name
+GenericName=$appimage_name
+Comment=$comment
+Exec=$prg %U
+Icon=$prg
+Type=Application
+Terminal=false
+Categories=$categories" > "$prg.desktop"
+
+echo "#!/bin/bash
+
+cd \$APPDIR
+desktopfile=~/.local/share/applications/Noi.desktop
+iconfile=~/.local/share/pixmaps/Noi.png
+
+test ! -e \"\$desktopfile\" && cp Noi.desktop ~/.local/share/applications/
+test ! -e \"\$iconfile\" && cp Noi.png ~/.local/share/pixmaps/
+
+if ! grep -q \"\$APPIMAGE\" \"\$desktopfile\"; then
+    sed -i \"s:Exec=.*:Exec=\$APPIMAGE:\" \"\$desktopfile\"
+    sed -i \"s:Icon=.*:Icon=\$iconfile:\" \"\$desktopfile\"
+    /usr/bin/update-desktop-database -q || true
+    test -e usr/share/icons/hicolor/icon-theme.cache && {
+        test -x /usr/bin/gtk-update-icon-cache && /usr/bin/gtk-update-icon-cache ~/.local/share/pixmaps/ 2>&1 >&- || true
+    }
+fi
+
+cd \$APPDIR/usr/lib/noi
+./noi "$@"
+" > AppRun
+
+chmod +x AppRun
+
+cd ..
+
+printf "\n"; for ((i=0; i<$COLUMNS; i++)); { printf '─'; }; echo -e "\n"
+
+env ARCH=$arch ./appimagetool-x86_64.AppImage "$prg.AppDir"
+mv "${appimage_name// /_}-$arch.AppImage" "$prg-$version-$arch.AppImage"
+
+printf "\n"; for ((i=0; i<$COLUMNS; i++)); { printf '─'; }; echo -e "\n"
+
+rm -rf "$prg.AppDir"
+cd ..
+
+echo "appimage saved in $destdir/$prg-$version-$arch.AppImage"
+exit 0
